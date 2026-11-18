@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 8080;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Pocket Option Telegram Bot is Online and Listening 24/7\n');
-}).listen(PORT, () => {
+}).listen(PORT, '0.0.0.0', () => {
   console.log(`[HTTP Server] Health check listening on port ${PORT}`);
 });
 
