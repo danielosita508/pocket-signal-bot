@@ -3,8 +3,8 @@ services:
     name: pocket-signal-bot
     runtime: node
     plan: free
-    buildCommand: npm install --production
-    startCommand: node index.js
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
       - key: IS_DEMO
         value: "true"
