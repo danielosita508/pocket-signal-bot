@@ -54,20 +54,20 @@ http.createServer((req, res) => {
       try {
         console.log("\n[Test Trigger] Manual test trade requested via web URL!");
         await pocket.openOrder({
-          asset: "AUDUSD_otc",
-          amount: TRADE_AMOUNT,
+          asset: "AUDCAD_otc",
+          amount: 10,
           action: "call",
-          time: 60
+          time: 120
         });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           status: "SUCCESS",
-          message: "Test trade successfully sent to Pocket Option Demo! Check your Pocket Option open trades window.",
+          message: "2-Minute Test trade successfully sent to Pocket Option Demo! Check your Pocket Option open trades window right now.",
           details: {
-            asset: "AUDUSD_otc",
+            asset: "AUDCAD_otc",
             action: "CALL / HIGHER",
-            amount: "$" + TRADE_AMOUNT,
-            duration: "60 seconds",
+            amount: "$10",
+            duration: "120 seconds (2 minutes)",
             mode: "DEMO"
           }
         }, null, 2));
