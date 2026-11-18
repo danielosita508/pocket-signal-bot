@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: pocket-signal-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install --production
+    startCommand: node index.js
+    envVars:
+      - key: IS_DEMO
+        value: "true"
+      - key: TRADE_AMOUNT
+        value: "10"
+      - key: MIN_BALANCE_FLOOR
+        value: "30"
+      - key: TARGET_CHANNEL_ID
+        sync: false
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: TELEGRAM_SESSION
+        sync: false
+      - key: POCKET_UID
+        sync: false
+      - key: POCKET_SESSION_TOKEN
+        sync: false

@@ -1,9 +1,19 @@
 const { TelegramClient } = require("telegram");
 const { StringSession } = require("telegram/sessions");
 const { NewMessage } = require("telegram/events");
+const http = require("http");
 const PocketOptionClient = require("./pocket_client");
 const { parseSignal } = require("./parser");
 require("dotenv").config();
+
+// Lightweight HTTP server for Cloud Hosting platforms (Render, Koyeb, etc.)
+const PORT = process.env.PORT || 8080;
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Pocket Option Telegram Bot is Online and Listening 24/7\n');
+}).listen(PORT, () => {
+  console.log(`[HTTP Server] Health check listening on port ${PORT}`);
+});
 
 // Configuration
 const API_ID = parseInt(process.env.TELEGRAM_API_ID, 10);
