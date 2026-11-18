@@ -136,17 +136,20 @@ class PocketOptionClient extends EventEmitter {
           }
         }
 
-        if (msg.startsWith('42')) {
-          const eventData = JSON.parse(msg.substring(2));
-          const [eventName, payload] = eventData;
+        if (msg.startsWith('42') || msg.startsWith('45')) {
+          const raw = msg.startsWith('45') ? msg.substring(msg.indexOf('[')) : msg.substring(2);
+          try {
+            const eventData = JSON.parse(raw);
+            const [eventName, payload] = eventData;
 
-          if (eventName === 'successOpenOrder') {
-            console.log('[Pocket Option] 🎯 ORDER EXECUTED SUCCESSFULLY:', payload);
-            this.emit('orderSuccess', payload);
-          } else if (eventName === 'failOpenOrder') {
-            console.error('[Pocket Option] ❌ ORDER FAILED:', payload);
-            this.emit('orderFail', payload);
-          }
+            if (eventName === 'successopenOrder' || eventName === 'successOpenOrder') {
+              console.log('[Pocket Option] 🎯 ORDER EXECUTED SUCCESSFULLY BY BROKER:', payload);
+              this.emit('orderSuccess', payload);
+            } else if (eventName === 'failopenOrder' || eventName === 'failOpenOrder') {
+              console.error('[Pocket Option] ❌ BROKER REJECTED ORDER:', payload);
+              this.emit('orderFail', payload);
+            }
+          } catch (e) {}
         }
       } catch (e) {
         // Non-JSON or binary data
@@ -161,7 +164,9 @@ class PocketOptionClient extends EventEmitter {
       {
         "sessionToken": this.sessionToken,
         "uid": String(this.uid),
-        "lang": "en"
+        "lang": "en",
+        "isChart": 1,
+        "currentUrl": "cabinet/demo-quick-high-low"
       }
     ];
     try {
@@ -187,6 +192,7 @@ class PocketOptionClient extends EventEmitter {
     console.log(`  • Expiry: ${time}s`);
     console.log(`  • Demo:   ${this.isDemo ? 'YES' : 'NO'}`);
 
+    const requestId = Math.floor(Math.random() * 90000000) + 10000000;
     const orderPayload = [
       'openOrder',
       {
@@ -194,10 +200,13 @@ class PocketOptionClient extends EventEmitter {
         amount: Number(amount),
         action: action.toLowerCase(),
         time: Number(time),
-        isDemo: this.isDemo ? 1 : 0
+        isDemo: this.isDemo ? 1 : 0,
+        requestId: requestId,
+        optionType: 100
       }
     ];
 
+    console.log('[Pocket Option] Outgoing payload:', JSON.stringify(orderPayload));
     this.ws.send('42' + JSON.stringify(orderPayload));
   }
 
