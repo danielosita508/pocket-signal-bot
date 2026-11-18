@@ -6,15 +6,6 @@ const PocketOptionClient = require("./pocket_client");
 const { parseSignal } = require("./parser");
 require("dotenv").config();
 
-// Lightweight HTTP server for Cloud Hosting platforms (Render, Koyeb, etc.)
-const PORT = process.env.PORT || 8080;
-http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Pocket Option Telegram Bot is Online and Listening 24/7\n');
-}).listen(PORT, '0.0.0.0', () => {
-  console.log(`[HTTP Server] Health check listening on port ${PORT}`);
-});
-
 // Configuration
 const API_ID = parseInt(process.env.TELEGRAM_API_ID, 10);
 const API_HASH = process.env.TELEGRAM_API_HASH;
@@ -53,6 +44,47 @@ const pocket = new PocketOptionClient({
   sessionToken: POCKET_SESSION_TOKEN,
   uid: POCKET_UID,
   isDemo: IS_DEMO ? 1 : 0
+});
+
+// 2. HTTP Server with Live Health Check & Instant Test-Trade Trigger
+const PORT = process.env.PORT || 8080;
+http.createServer((req, res) => {
+  if (req.url === '/test-trade') {
+    try {
+      console.log("\n[Test Trigger] Manual test trade requested via web URL!");
+      pocket.openOrder({
+        asset: "AUDUSD_otc",
+        amount: TRADE_AMOUNT,
+        action: "call",
+        time: 60
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: "SUCCESS",
+        message: "Test trade successfully sent to Pocket Option Demo! Check your Pocket Option open trades window.",
+        details: {
+          asset: "AUDUSD_otc",
+          action: "CALL / HIGHER",
+          amount: "$" + TRADE_AMOUNT,
+          duration: "60 seconds",
+          mode: "DEMO"
+        }
+      }, null, 2));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: "ERROR", error: err.message }, null, 2));
+    }
+    return;
+  }
+
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end(
+    "Pocket Option Telegram Bot is Online and Listening 24/7\n\n" +
+    "To test a trade on your Demo account right now, visit:\n" +
+    "https://pocket-signal-bot-dp4q.onrender.com/test-trade\n"
+  );
+}).listen(PORT, '0.0.0.0', () => {
+  console.log(`[HTTP Server] Health check listening on port ${PORT}`);
 });
 
 // 2. Initialize Telegram MTProto Client
