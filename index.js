@@ -50,30 +50,32 @@ const pocket = new PocketOptionClient({
 const PORT = process.env.PORT || 8080;
 http.createServer((req, res) => {
   if (req.url === '/test-trade') {
-    try {
-      console.log("\n[Test Trigger] Manual test trade requested via web URL!");
-      pocket.openOrder({
-        asset: "AUDUSD_otc",
-        amount: TRADE_AMOUNT,
-        action: "call",
-        time: 60
-      });
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        status: "SUCCESS",
-        message: "Test trade successfully sent to Pocket Option Demo! Check your Pocket Option open trades window.",
-        details: {
+    (async () => {
+      try {
+        console.log("\n[Test Trigger] Manual test trade requested via web URL!");
+        await pocket.openOrder({
           asset: "AUDUSD_otc",
-          action: "CALL / HIGHER",
-          amount: "$" + TRADE_AMOUNT,
-          duration: "60 seconds",
-          mode: "DEMO"
-        }
-      }, null, 2));
-    } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: "ERROR", error: err.message }, null, 2));
-    }
+          amount: TRADE_AMOUNT,
+          action: "call",
+          time: 60
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          status: "SUCCESS",
+          message: "Test trade successfully sent to Pocket Option Demo! Check your Pocket Option open trades window.",
+          details: {
+            asset: "AUDUSD_otc",
+            action: "CALL / HIGHER",
+            amount: "$" + TRADE_AMOUNT,
+            duration: "60 seconds",
+            mode: "DEMO"
+          }
+        }, null, 2));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: "ERROR", error: err.message }, null, 2));
+      }
+    })();
     return;
   }
 

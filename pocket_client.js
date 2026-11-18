@@ -9,54 +9,103 @@ class PocketOptionClient extends EventEmitter {
     this.isDemo = options.isDemo !== undefined ? options.isDemo : 1; // 1 = Demo, 0 = Real
     this.wsUrl = options.wsUrl || 'wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket';
     this.ws = null;
-    this.pingTimer = null;
     this.authenticated = false;
-    this.balance = 10000; // Demo default
+    this.connecting = false;
+    this.balance = 10000;
+    this.reconnectTimer = null;
+    this.pingInterval = null;
   }
 
   connect() {
+    if (this.authenticated) return Promise.resolve();
+    if (this.connecting) {
+      return new Promise((resolve) => this.once('authenticated', resolve));
+    }
+
+    this.connecting = true;
+
     return new Promise((resolve, reject) => {
       console.log(`[Pocket Option] Connecting to ${this.wsUrl}...`);
-      this.ws = new WebSocket(this.wsUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-          'Origin': 'https://pocketoption.com'
+      
+      try {
+        if (this.ws) {
+          try { this.ws.terminate(); } catch (e) {}
         }
-      });
 
-      this.ws.on('open', () => {
-        console.log('[Pocket Option] ✅ WebSocket Connected.');
-      });
+        this.ws = new WebSocket(this.wsUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+            'Origin': 'https://pocketoption.com'
+          },
+          handshakeTimeout: 8000
+        });
 
-      this.ws.on('message', (data) => {
-        const msg = data.toString();
-        this.handleMessage(msg, resolve);
-      });
+        const authTimeout = setTimeout(() => {
+          if (!this.authenticated) {
+            console.warn('[Pocket Option] Auth timeout. Reconnecting...');
+            this.connecting = false;
+            this.scheduleReconnect();
+          }
+        }, 10000);
 
-      this.ws.on('error', (err) => {
-        console.error('[Pocket Option] WebSocket Error:', err.message);
-        this.emit('error', err);
-      });
+        this.ws.on('open', () => {
+          console.log('[Pocket Option] ✅ WebSocket Connected.');
+        });
 
-      this.ws.on('close', (code, reason) => {
-        console.log(`[Pocket Option] Connection closed (${code}): ${reason}`);
-        this.authenticated = false;
-        clearInterval(this.pingTimer);
-        this.emit('close');
-      });
+        this.ws.on('message', (data) => {
+          const msg = data.toString();
+          this.handleMessage(msg, () => {
+            clearTimeout(authTimeout);
+            this.connecting = false;
+            resolve();
+          });
+        });
+
+        this.ws.on('error', (err) => {
+          console.error('[Pocket Option] WebSocket Error:', err.message);
+          this.authenticated = false;
+          this.connecting = false;
+          clearTimeout(authTimeout);
+          this.scheduleReconnect();
+        });
+
+        this.ws.on('close', (code, reason) => {
+          console.log(`[Pocket Option] Connection closed (${code}). Scheduling reconnect...`);
+          this.authenticated = false;
+          this.connecting = false;
+          clearTimeout(authTimeout);
+          clearInterval(this.pingInterval);
+          this.scheduleReconnect();
+        });
+
+      } catch (err) {
+        console.error('[Pocket Option] Connection exception:', err.message);
+        this.connecting = false;
+        this.scheduleReconnect();
+        reject(err);
+      }
     });
   }
 
+  scheduleReconnect() {
+    if (this.reconnectTimer) return;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      console.log('[Pocket Option] 🔄 Auto-reconnecting to server...');
+      this.connect().catch(() => {});
+    }, 3000);
+  }
+
   handleMessage(msg, onConnected) {
-    // Engine.IO Heartbeat
+    // Engine.IO Heartbeat (server sends 2, reply 3)
     if (msg === '2') {
-      this.ws.send('3'); // Reply pong
+      try { this.ws.send('3'); } catch (e) {}
       return;
     }
 
     // Engine.IO open handshake: 0{"sid":"..."}
     if (msg.startsWith('0')) {
-      this.ws.send('40'); // Socket.io handshake
+      try { this.ws.send('40'); } catch (e) {}
       return;
     }
 
@@ -72,7 +121,16 @@ class PocketOptionClient extends EventEmitter {
         if (msg.includes('auth/success') || msg.includes('updateAssets')) {
           if (!this.authenticated) {
             this.authenticated = true;
-            console.log(`[Pocket Option] ✅ AUTH SUCCESS! Logged in as UID: ${this.uid} (Mode: ${this.isDemo ? 'DEMO' : 'REAL'})`);
+            console.log(`[Pocket Option] ✅ AUTH SUCCESS! UID: ${this.uid} (Mode: ${this.isDemo ? 'DEMO' : 'REAL'})`);
+            
+            // Start heartbeat ping keeper
+            clearInterval(this.pingInterval);
+            this.pingInterval = setInterval(() => {
+              if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send('2');
+              }
+            }, 20000);
+
             this.emit('authenticated');
             if (onConnected) onConnected();
           }
@@ -91,7 +149,7 @@ class PocketOptionClient extends EventEmitter {
           }
         }
       } catch (e) {
-        // Non-JSON or binary placeholder
+        // Non-JSON or binary data
       }
     }
   }
@@ -106,10 +164,19 @@ class PocketOptionClient extends EventEmitter {
         "lang": "en"
       }
     ];
-    this.ws.send('42' + JSON.stringify(authPayload));
+    try {
+      this.ws.send('42' + JSON.stringify(authPayload));
+    } catch (e) {
+      console.error('[Pocket Option] SendAuth error:', e.message);
+    }
   }
 
-  openOrder({ asset, amount, action, time }) {
+  async openOrder({ asset, amount, action, time }) {
+    if (!this.authenticated) {
+      console.log('[Pocket Option] Order requested while disconnected. Reconnecting first...');
+      await this.connect();
+    }
+
     if (!this.authenticated) {
       throw new Error('Cannot open order: Not authenticated with Pocket Option');
     }
@@ -125,8 +192,8 @@ class PocketOptionClient extends EventEmitter {
       {
         asset: asset,
         amount: Number(amount),
-        action: action.toLowerCase(), // 'call' or 'put'
-        time: Number(time),           // seconds (e.g. 240)
+        action: action.toLowerCase(),
+        time: Number(time),
         isDemo: this.isDemo ? 1 : 0
       }
     ];
@@ -135,8 +202,9 @@ class PocketOptionClient extends EventEmitter {
   }
 
   disconnect() {
+    clearTimeout(this.reconnectTimer);
+    clearInterval(this.pingInterval);
     if (this.ws) {
-      clearInterval(this.pingTimer);
       this.ws.close();
     }
   }
