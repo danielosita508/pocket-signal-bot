@@ -50,25 +50,31 @@ const pocket = new PocketOptionClient({
 // 2. HTTP Server with Live Health Check & Instant Test-Trade Trigger
 const PORT = process.env.PORT || 8080;
 http.createServer((req, res) => {
-  if (req.url === '/test-trade') {
+  const urlObj = new URL(req.url, 'http://localhost');
+  if (urlObj.pathname === '/test-trade') {
     (async () => {
       try {
-        console.log("\n[Test Trigger] Manual test trade requested via web URL!");
+        const tradeAsset = urlObj.searchParams.get('asset') || 'AUDCAD_otc';
+        const tradeAction = (urlObj.searchParams.get('action') || 'call').toLowerCase();
+        const tradeTime = parseInt(urlObj.searchParams.get('time') || '240', 10);
+        const tradeAmount = parseFloat(urlObj.searchParams.get('amount') || '10');
+
+        console.log(`\n[Test Trigger] Manual test trade requested via web URL: ${tradeAsset} ${tradeAction} ${tradeTime}s ($${tradeAmount})`);
         await pocket.openOrder({
-          asset: "AUDCAD_otc",
-          amount: 10,
-          action: "call",
-          time: 120
+          asset: tradeAsset,
+          amount: tradeAmount,
+          action: tradeAction,
+          time: tradeTime
         });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           status: "SUCCESS",
-          message: "2-Minute Test trade successfully sent to Pocket Option Demo! Check your Pocket Option open trades window right now.",
+          message: `${tradeTime / 60}-Minute Test trade successfully sent to Pocket Option Demo! Check your Pocket Option open trades window right now.`,
           details: {
-            asset: "AUDCAD_otc",
-            action: "CALL / HIGHER",
-            amount: "$10",
-            duration: "120 seconds (2 minutes)",
+            asset: tradeAsset,
+            action: tradeAction === 'call' ? "CALL / HIGHER" : "PUT / LOWER",
+            amount: "$" + tradeAmount,
+            duration: `${tradeTime} seconds (${tradeTime / 60} minutes)`,
             mode: "DEMO"
           }
         }, null, 2));
@@ -100,7 +106,7 @@ http.createServer((req, res) => {
   };
 
   // Immediate ping + recurring every 5 minutes
-  setTimeout(pingServer, 10000);
+  setTimeout(pingServer, 5000);
   setInterval(pingServer, 5 * 60 * 1000);
 });
 
