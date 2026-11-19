@@ -127,7 +127,8 @@ async function start() {
     console.log("[Telegram] ✅ Connected successfully!");
 
     const me = await telegram.getMe();
-    console.log(`[Telegram] Logged in as: ${me.firstName} (@${me.username || me.phone})`);
+    const myIdStr = me.id.toString();
+    console.log(`[Telegram] Logged in as: ${me.firstName} (@${me.username || me.phone}) [ID: ${myIdStr}]`);
     console.log("[System] 👂 Now listening 24/7 for trade signals...\n");
 
     // Listen for new messages
@@ -135,8 +136,50 @@ async function start() {
       const message = event.message;
       if (!message || !message.text) return;
 
-      // Filter specifically for Rai Fair Trader channel
       const chatId = message.chatId ? message.chatId.toString() : '';
+      const textTrim = message.text.trim();
+
+      // 1. Interactive Telegram Commands in Saved Messages (Chat with Yourself)
+      if (chatId === myIdStr || (message.peerId && message.peerId.userId && message.peerId.userId.toString() === myIdStr)) {
+        if (textTrim === "/status") {
+          console.log("[Telegram Command] User requested /status");
+          await telegram.sendMessage("me", {
+            message: `🤖 Pocket Option Signal Bot (Cloud 24/7)\n\n` +
+                     `• Server: ONLINE 🟢 (Render Frankfurt)\n` +
+                     `• Broker: Connected & Authenticated\n` +
+                     `• Mode: ${IS_DEMO ? "DEMO ACCOUNT" : "REAL ACCOUNT"}\n` +
+                     `• Fixed Stake: $${TRADE_AMOUNT}\n` +
+                     `• Target Channel: RAI FAIR TRADER\n\n` +
+                     `Your bot is listening 24/7. Your laptop can be completely off!`
+          });
+          return;
+        }
+
+        if (textTrim === "/test") {
+          console.log("[Telegram Command] User requested /test trade");
+          await telegram.sendMessage("me", {
+            message: `⏳ Placing test trade on Pocket Option Demo (AUD/CAD OTC, CALL, 3m, $${TRADE_AMOUNT})...`
+          });
+          try {
+            await pocket.openOrder({
+              asset: "AUDCAD_otc",
+              amount: TRADE_AMOUNT,
+              action: "call",
+              time: 180
+            });
+            await telegram.sendMessage("me", {
+              message: `✅ Test trade successfully executed on Pocket Option Demo!\nCheck your Pocket Option screen under 'Opened' or 'Closed' trades.`
+            });
+          } catch (err) {
+            await telegram.sendMessage("me", {
+              message: `❌ Test trade failed: ${err.message}`
+            });
+          }
+          return;
+        }
+      }
+
+      // 2. Filter specifically for Rai Fair Trader channel
       if (TARGET_CHANNEL_ID && !chatId.includes('2684722871') && chatId !== TARGET_CHANNEL_ID) {
         return;
       }
@@ -166,9 +209,28 @@ async function start() {
 
       console.log(`[Parsed Trade] Asset: ${parsed.pocketAsset} | Expiry: ${parsed.minutes}m (${parsed.durationSeconds}s) | Action: ${parsed.action.toUpperCase()}`);
 
+      // Notify User on Telegram Saved Messages
+      try {
+        await telegram.sendMessage("me", {
+          message: `⚡ [SIGNAL DETECTED FROM RAI]\n` +
+                   `💱 Asset: ${parsed.asset}\n` +
+                   `⏱️ Expiry: ${parsed.minutes} min\n` +
+                   `📊 Action: ${parsed.action.toUpperCase()} ${parsed.action === 'call' ? '🟢 CALL' : '🔴 SELL'}\n` +
+                   `💰 Stake: $${TRADE_AMOUNT} (DEMO)\n\n` +
+                   `⏳ Dispatching order to Pocket Option...`
+        });
+      } catch (e) {
+        console.warn('[Telegram Alert Error]', e.message);
+      }
+
       // Safety Guard: Check account balance floor
       if (pocket.balance !== null && pocket.balance < MIN_BALANCE_FLOOR) {
         console.error(`🛑 HALT: Account balance ($${pocket.balance}) is below safety floor ($${MIN_BALANCE_FLOOR}). Order cancelled.`);
+        try {
+          await telegram.sendMessage("me", {
+            message: `🛑 ORDER CANCELLED: Account balance ($${pocket.balance}) is below safety floor ($${MIN_BALANCE_FLOOR}).`
+          });
+        } catch (e) {}
         return;
       }
 
@@ -181,8 +243,23 @@ async function start() {
           time: parsed.durationSeconds
         });
         console.log(`✅ [Trade Dispatched] Successfully sent ${parsed.pocketAsset} ${parsed.action.toUpperCase()} order to broker!`);
+        try {
+          await telegram.sendMessage("me", {
+            message: `✅ [TRADE EXECUTED ON POCKET OPTION]\n` +
+                     `Asset: ${parsed.pocketAsset}\n` +
+                     `Action: ${parsed.action.toUpperCase()}\n` +
+                     `Duration: ${parsed.minutes} min\n` +
+                     `Amount: $${TRADE_AMOUNT}\n` +
+                     `Mode: DEMO`
+          });
+        } catch (e) {}
       } catch (err) {
         console.error("❌ Failed to place trade on Pocket Option:", err.message);
+        try {
+          await telegram.sendMessage("me", {
+            message: `❌ Failed to place trade on Pocket Option: ${err.message}`
+          });
+        } catch (e) {}
       }
     }, new NewMessage({}));
 
