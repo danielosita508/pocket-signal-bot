@@ -176,6 +176,14 @@ class PocketOptionClient extends EventEmitter {
     }
   }
 
+  getValidDuration(seconds) {
+    const valid = [60, 120, 180, 300, 600, 900, 1800, 2700, 3600];
+    const s = Number(seconds) || 180;
+    if (valid.includes(s)) return s;
+    // Snap to closest supported duration (e.g. 240s -> 180s)
+    return valid.reduce((prev, curr) => Math.abs(curr - s) < Math.abs(prev - s) ? curr : prev);
+  }
+
   async openOrder({ asset, amount, action, time }) {
     if (!this.authenticated) {
       console.log('[Pocket Option] Order requested while disconnected. Reconnecting first...');
@@ -186,10 +194,12 @@ class PocketOptionClient extends EventEmitter {
       throw new Error('Cannot open order: Not authenticated with Pocket Option');
     }
 
+    const validTime = this.getValidDuration(time);
+
     console.log(`[Pocket Option] 🚀 DISPATCHING ${action.toUpperCase()} ORDER:`);
     console.log(`  • Asset:  ${asset}`);
     console.log(`  • Stake:  $${amount}`);
-    console.log(`  • Expiry: ${time}s`);
+    console.log(`  • Expiry: ${validTime}s (requested: ${time}s)`);
     console.log(`  • Demo:   ${this.isDemo ? 'YES' : 'NO'}`);
 
     const requestId = Math.floor(Math.random() * 90000000) + 10000000;
@@ -199,7 +209,7 @@ class PocketOptionClient extends EventEmitter {
         asset: asset,
         amount: Number(amount),
         action: action.toLowerCase(),
-        time: Number(time),
+        time: validTime,
         isDemo: this.isDemo ? 1 : 0,
         requestId: requestId,
         optionType: 100
