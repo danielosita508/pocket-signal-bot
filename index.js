@@ -2,6 +2,7 @@ const { TelegramClient } = require("telegram");
 const { StringSession } = require("telegram/sessions");
 const { NewMessage } = require("telegram/events");
 const http = require("http");
+const https = require("https");
 const PocketOptionClient = require("./pocket_client");
 const { parseSignal } = require("./parser");
 require("dotenv").config();
@@ -88,15 +89,19 @@ http.createServer((req, res) => {
 }).listen(PORT, '0.0.0.0', () => {
   console.log(`[HTTP Server] Health check listening on port ${PORT}`);
 
-  // 10-Minute Inbound Keep-Alive Self-Ping to prevent Render free-tier sleep
+  // Automated 5-Minute Inbound Keep-Alive Ping to keep Render Awake 24/7
   const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL || 'https://pocket-signal-bot-dp4q.onrender.com';
-  setInterval(() => {
+  const pingServer = () => {
     https.get(`${RENDER_EXTERNAL_URL}/`, (res) => {
       console.log(`[Keep-Alive Ping] Status: ${res.statusCode} at ${new Date().toISOString()}`);
     }).on('error', (err) => {
       console.warn('[Keep-Alive Ping] Warning:', err.message);
     });
-  }, 10 * 60 * 1000); // Every 10 minutes
+  };
+
+  // Immediate ping + recurring every 5 minutes
+  setTimeout(pingServer, 10000);
+  setInterval(pingServer, 5 * 60 * 1000);
 });
 
 // 2. Initialize Telegram MTProto Client
