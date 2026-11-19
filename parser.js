@@ -34,25 +34,30 @@ function parseSignal(text, receivedDate = new Date()) {
   if (!text.includes("SIGNAL")) return null;
 
   try {
-    // 1. Extract Asset
-    const assetMatch = text.match(/Asset:\s*([A-Za-z0-9/ ]+?(?:OTC)?)(?:\r|\n|$)/i);
+    // Strip telegram markdown symbols (*, _, ~, `) that might be in the raw text
+    const cleanText = text.replace(/[*_~`]/g, '');
+
+    // 1. Extract Asset (e.g. Asset: AED/CNY OTC)
+    const assetMatch = cleanText.match(/Asset:\s*([A-Za-z0-9/ ]+?(?:OTC)?)(?:\r|\n|$)/i) 
+                    || cleanText.match(/Asset:\s*([A-Za-z0-9/ ]+)/i);
     if (!assetMatch) return null;
-    const rawAsset = assetMatch[1].trim();
+    let rawAsset = assetMatch[1].trim();
 
     // Map to Pocket Option asset format
     const assetKey = Object.keys(ASSET_MAP).find(k => k.toLowerCase() === rawAsset.toLowerCase()) || rawAsset;
-    const pocketAsset = ASSET_MAP[assetKey] || rawAsset.replace('/', '').replace(/\s+/g, '_');
+    let pocketAsset = ASSET_MAP[assetKey] || rawAsset.replace('/', '').replace(/\s+/g, '_');
+    pocketAsset = pocketAsset.replace(/_OTC/i, '_otc');
 
     // 2. Extract Duration (e.g. 4️⃣ MIN, 5 MIN)
-    const timeMatch = text.match(/Trade Time:\s*([^\r\n]+)/i);
+    const timeMatch = cleanText.match(/Trade Time:\s*([^\r\n]+)/i);
     const minutes = timeMatch ? cleanNumber(timeMatch[1]) : 4;
     const durationSeconds = minutes * 60;
 
-    // 3. Extract Direction (UP 🟢 / DOWN 🔴)
-    const signalMatch = text.match(/Signal:\s*([A-Za-z]+)/i);
+    // 3. Extract Direction (UP 🟢 / DOWN 🔴 / HIGHER / LOWER)
+    const signalMatch = cleanText.match(/Signal:\s*([A-Za-z]+)/i);
     if (!signalMatch) return null;
     const rawDir = signalMatch[1].toUpperCase();
-    const action = (rawDir.includes("UP") || rawDir.includes("BUY") || rawDir.includes("CALL")) ? "call" : "put";
+    const action = (rawDir.includes("UP") || rawDir.includes("BUY") || rawDir.includes("CALL") || rawDir.includes("HIGH")) ? "call" : "put";
 
     return {
       rawAsset,

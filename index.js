@@ -140,8 +140,8 @@ async function start() {
       console.log(`[Signal Detected] Time: ${new Date().toISOString()}`);
       console.log(message.text);
 
-      // Guard: Do not execute stale signals older than 60 seconds
-      if (dateNow - msgDate > 60) {
+      // Guard: Do not execute stale signals older than 120 seconds
+      if (dateNow - msgDate > 120) {
         console.warn(`⚠️ IGNORED: Signal is stale (Received ${dateNow - msgDate}s after broadcast).`);
         return;
       }
@@ -149,7 +149,7 @@ async function start() {
       // Parse Signal
       const parsed = parseSignal(message.text);
       if (!parsed) {
-        console.warn("⚠️ Could not parse trade parameters from message.");
+        console.warn("⚠️ Could not parse trade parameters from message:", message.text);
         return;
       }
 
@@ -163,12 +163,13 @@ async function start() {
 
       // Execute Trade
       try {
-        pocket.openOrder({
+        await pocket.openOrder({
           asset: parsed.pocketAsset,
           amount: TRADE_AMOUNT,
           action: parsed.action,
           time: parsed.durationSeconds
         });
+        console.log(`✅ [Trade Dispatched] Successfully sent ${parsed.pocketAsset} ${parsed.action.toUpperCase()} order to broker!`);
       } catch (err) {
         console.error("❌ Failed to place trade on Pocket Option:", err.message);
       }
