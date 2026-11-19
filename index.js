@@ -87,6 +87,16 @@ http.createServer((req, res) => {
   );
 }).listen(PORT, '0.0.0.0', () => {
   console.log(`[HTTP Server] Health check listening on port ${PORT}`);
+
+  // 10-Minute Inbound Keep-Alive Self-Ping to prevent Render free-tier sleep
+  const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL || 'https://pocket-signal-bot-dp4q.onrender.com';
+  setInterval(() => {
+    https.get(`${RENDER_EXTERNAL_URL}/`, (res) => {
+      console.log(`[Keep-Alive Ping] Status: ${res.statusCode} at ${new Date().toISOString()}`);
+    }).on('error', (err) => {
+      console.warn('[Keep-Alive Ping] Warning:', err.message);
+    });
+  }, 10 * 60 * 1000); // Every 10 minutes
 });
 
 // 2. Initialize Telegram MTProto Client
